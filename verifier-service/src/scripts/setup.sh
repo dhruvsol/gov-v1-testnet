@@ -8,7 +8,7 @@ METRICS_AUTH_TOKEN="change-me-please"
 PORT_HOST=8000
 PORT_CONTAINER=8000
 DATA_DIR=/testnet/srv/verifier/data
-DB_PATH=/data-testnet/governance.db
+DB_PATH=/data/governance.db
 
 # Rate and File Upload Limits
 GLOBAL_REFILL_INTERVAL=10
