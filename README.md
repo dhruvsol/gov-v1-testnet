@@ -138,7 +138,7 @@ RUST_LOG=info cargo run --bin cli -- \
   update-operator-whitelist -a key1,key2,key3 -r key4,key5
 
 # Update config (all arguments are optional):
-# threshold, vote duration, tie-breaker-admin, new admin authority
+# threshold, vote duration, tie-breaker-admin, proposed authority (two-step)
 RUST_LOG=info cargo run --bin cli -- \
   --payer-path ~/.config/solana/id.json \
   --authority-path ~/.config/solana/id.json \
@@ -147,12 +147,23 @@ RUST_LOG=info cargo run --bin cli -- \
   --min-consensus-threshold-bps 6000 \
   --vote-duration 180 \
   --tie-breaker-admin key1 \
-  --new-authority-path ~/.config/solana/id.json
+  --proposed-authority <NEW_ADMIN_PUBKEY>
+
+# Finalize proposed authority (run as the proposed authority)
+RUST_LOG=info cargo run --bin cli -- \
+  --payer-path ~/.config/solana/id.json \
+  --authority-path <PATH_TO_PROPOSED_AUTHORITY_KEYPAIR> \
+  --rpc-url https://api.devnet.solana.com \
+  finalize-proposed-authority
 ```
 
 ---
 
 ### Snapshot Generation and Handling
+
+Environment variables affecting snapshot IO:
+
+- `GOV_V1_MAX_SNAPSHOT_MB` (optional): maximum allowed decompressed snapshot size (in MiB) enforced by the CLI bounded decompressor when reading gzip files or raw files. Default is 256. Increase if your snapshots legitimately exceed this size.
 
 ```bash
 # Generates a Solana ledger snapshot for a specific slot (from validator bank state)
@@ -194,7 +205,28 @@ cargo run --release --bin cli -- \
 RUST_LOG=info cargo run --bin cli -- --authority-path ~/.config/solana/id.json log-meta-merkle-hash  --read-path ./meta_merkle-367628001.zip --is-compressed
 ```
 
----
+#### Await Snapshot (RECOMMENDED)
+
+Waits until the target slot is passed (by observing on-disk snapshots on specified interval), backs up the full snapshot, incremental snapshot and ledger into specified directories, and initiates snapshot creation for that slot. Optionally, it can also generate a MetaMerkle snapshot once the full snapshot is created.
+
+This is recommended as 1) no slot watching and manual invocation is required when target slot has passed, 2) ledger replay is kept to a minimum, and 3) allows manual snapshot generation from backup files on failure.
+
+Example:
+
+```bash
+RUSTFLAGS="-C target-cpu=native" RAYON_NUM_THREADS=$(nproc) ZSTD_NBTHREADS=$(nproc) \
+RUST_LOG=info,solana_runtime=warn,solana_accounts_db=warn,solana_metrics=warn \
+cargo run --release --bin cli -- \
+  await-snapshot \
+  --scan-interval 1 \
+  --slot 368478463 \
+  --snapshots-dir /mnt/ledger/snapshots \
+  --backup-snapshots-dir /mnt/ledger/gov-backup-snapshots \
+  --backup-ledger-dir /mnt/ledger/gov-ledger-backup \
+  --agave-ledger-tool-path /home/jito/agave/target/release/agave-ledger-tool \
+  --ledger-path /mnt/ledger \
+  --generate-meta-merkle   # optional
+```
 
 ### Log On-Chain State
 

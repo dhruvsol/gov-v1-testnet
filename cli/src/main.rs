@@ -7,7 +7,7 @@ use anchor_client::{
     },
     Client, Cluster, Program,
 };
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use clap::Parser;
 use cli::{generate_meta_merkle_snapshot, utils::*, MetaMerkleSnapshot};
 use gov_v1::{Ballot, BallotBox, ConsensusResult, MetaMerkleProof, ProgramConfig};
@@ -15,11 +15,12 @@ use log::info;
 use solana_sdk::signer::Signer;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::runtime::Builder;
+use std::{collections::HashMap, fs, process::Command, thread, time::Duration};
 use tip_router_operator_cli::{
     cli::SnapshotPaths,
     ledger_utils::{get_bank_from_ledger, get_bank_from_snapshot_at_slot},
 };
+use tokio::runtime::Builder;
 
 #[derive(Clone, Parser)]
 #[command(author, version, about)]
@@ -101,6 +102,31 @@ pub enum Commands {
         #[arg(long, default_value = "true")]
         is_compressed: bool,
     },
+    AwaitSnapshot {
+        #[arg(long, help = "Scan interval in minutes")]
+        scan_interval: u64,
+
+        #[arg(long, help = "Target slot to snapshot")]
+        slot: u64,
+
+        #[arg(long, help = "Directory to scan for snapshots")]
+        snapshots_dir: PathBuf,
+
+        #[arg(long, help = "Directory to copy matching snapshots to")]
+        backup_snapshots_dir: PathBuf,
+
+        #[arg(long, help = "Directory to copy ledger range to")]
+        backup_ledger_dir: PathBuf,
+
+        #[arg(long, help = "Path to agave-ledger-tool binary")]
+        agave_ledger_tool_path: PathBuf,
+
+        #[arg(long, help = "Path to live ledger directory (-l)")]
+        ledger_path: PathBuf,
+
+        #[arg(long, help = "Generate MetaMerkleSnapshot after snapshot")]
+        generate_meta_merkle: bool,
+    },
     InitProgramConfig {},
     UpdateOperatorWhitelist {
         #[arg(short, long, value_delimiter = ',', value_parser = parse_pubkey)]
@@ -111,7 +137,7 @@ pub enum Commands {
     },
     UpdateProgramConfig {
         #[arg(long, env)]
-        new_authority_path: Option<String>,
+        proposed_authority: Option<Pubkey>,
 
         #[arg(long)]
         min_consensus_threshold_bps: Option<u16>,
@@ -122,6 +148,7 @@ pub enum Commands {
         #[arg(long)]
         vote_duration: Option<i64>,
     },
+    FinalizeProposedAuthority {},
     InitBallotBox {},
     FinalizeBallot {
         #[arg(long, help = "Id of ballot box")]
@@ -171,6 +198,10 @@ pub enum Commands {
 }
 
 fn main() -> Result<()> {
+    let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+        .is_test(false)
+        .try_init();
+
     let runtime = Builder::new_multi_thread().enable_all().build()?;
     let _enter = runtime.enter();
     let cli = Cli::parse();
@@ -285,7 +316,7 @@ fn main() -> Result<()> {
             info!("Transaction sent: {}", tx);
         }
         Commands::UpdateProgramConfig {
-            new_authority_path,
+            proposed_authority,
             min_consensus_threshold_bps,
             tie_breaker_admin,
             vote_duration,
@@ -295,8 +326,6 @@ fn main() -> Result<()> {
             let payer = read_keypair_file(&cli.payer_path).unwrap();
             let authority = read_keypair_file(&cli.authority_path).unwrap();
             let program = load_client_program(&payer, cli.rpc_url);
-            let new_auth_kp = new_authority_path.map(|path| read_keypair_file(&path).unwrap());
-            let new_authority = new_auth_kp.as_ref();
 
             let tx_sender = &TxSender {
                 program: &program,
@@ -306,11 +335,27 @@ fn main() -> Result<()> {
             };
             let tx = send_update_program_config(
                 tx_sender,
-                new_authority,
+                proposed_authority,
                 min_consensus_threshold_bps,
                 tie_breaker_admin,
                 vote_duration,
             )?;
+            info!("Transaction sent: {}", tx);
+        }
+        Commands::FinalizeProposedAuthority {} => {
+            info!("FinalizeProposedAuthority...");
+
+            let payer = read_keypair_file(&cli.payer_path).unwrap();
+            let authority = read_keypair_file(&cli.authority_path).unwrap();
+            let program = load_client_program(&payer, cli.rpc_url);
+
+            let tx_sender = &TxSender {
+                program: &program,
+                micro_lamports: cli.micro_lamports,
+                payer: &payer,
+                authority: &authority,
+            };
+            let tx = send_finalize_proposed_authority(tx_sender)?;
             info!("Transaction sent: {}", tx);
         }
         Commands::InitBallotBox {} => {
@@ -477,6 +522,205 @@ fn main() -> Result<()> {
             println!("Slot: {}", snapshot.slot);
             println!("Merkle Root: {}", encoded_root);
             println!("Snapshot Hash: {}", encoded_hash);
+        }
+        Commands::AwaitSnapshot {
+            scan_interval,
+            slot,
+            snapshots_dir,
+            backup_snapshots_dir,
+            backup_ledger_dir,
+            agave_ledger_tool_path,
+            ledger_path,
+            generate_meta_merkle,
+        } => {
+            info!(
+                "AwaitSnapshot starting: scan_interval={}m target_slot={} snapshot_dir={:?} backup_snapshot_dir={:?} backup_ledger_dir={:?}",
+                scan_interval,
+                slot,
+                snapshots_dir,
+                backup_snapshots_dir,
+                backup_ledger_dir
+            );
+
+            // Loop until we find a matching pair of snapshot files
+            let sleep_duration = Duration::from_secs(scan_interval.saturating_mul(60));
+            loop {
+                // Map of full snapshots by start slot: (start_slot, (name, path))
+                let mut full_by_start: HashMap<u64, (String, PathBuf)> = HashMap::new();
+
+                // Best matching incremental snapshot: (start_slot, end_slot, name, path)
+                let mut best_le: Option<(u64, u64, String, PathBuf)> = None;
+
+                // Flag to track if the target slot has elapsed
+                let mut exists_ge: bool = false;
+
+                match fs::read_dir(&snapshots_dir) {
+                    Ok(entries) => {
+                        for entry in entries.flatten() {
+                            if let Ok(file_type) = entry.file_type() {
+                                if !file_type.is_file() {
+                                    continue;
+                                }
+                            }
+
+                            let name_os = entry.file_name();
+                            let name = name_os.to_string_lossy().to_string();
+
+                            if let Some(start) = parse_full_snapshot_start_slot(&name) {
+                                full_by_start.insert(start, (name.clone(), entry.path()));
+                                continue;
+                            }
+                            if let Some((start, end)) = parse_incremental_snapshot_slots(&name) {
+                                // Track proof that target_slot has elapsed
+                                if end >= slot {
+                                    exists_ge = true;
+                                }
+                                // Track the largest end <= target_slot across all incrementals
+                                if end <= slot {
+                                    match best_le {
+                                        None => {
+                                            best_le = Some((start, end, name.clone(), entry.path()))
+                                        }
+                                        Some((_, cur_end, _, _)) => {
+                                            if end > cur_end {
+                                                best_le =
+                                                    Some((start, end, name.clone(), entry.path()));
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        info!(
+                            "Failed to read snapshot directory {:?}: {}. Retrying in {}m",
+                            snapshots_dir, err, scan_interval
+                        );
+                        thread::sleep(sleep_duration);
+                        continue;
+                    }
+                }
+
+                if !exists_ge {
+                    info!(
+                        "Target slot {} not yet passed; sleeping for {} minutes...",
+                        slot, scan_interval
+                    );
+                    thread::sleep(sleep_duration);
+                    continue;
+                }
+
+                if let Some((start_slot, best_end_le, incr_name, incr_path)) = best_le {
+                    if let Some((full_name, full_path)) = full_by_start.get(&start_slot) {
+                        info!(
+                            "Found matching snapshots: start_slot={} best_end_le={} (target_slot={})",
+                            start_slot, best_end_le, slot
+                        );
+
+                        // Copy files to backup snapshot directory
+                        let dest_full = backup_snapshots_dir.join(full_name);
+                        let dest_incr = backup_snapshots_dir.join(&incr_name);
+                        info!(
+                            "Copying {} and {} to {:?}",
+                            full_name, incr_name, backup_snapshots_dir
+                        );
+                        fs::create_dir_all(&backup_snapshots_dir)?;
+                        fs::copy(full_path, &dest_full)?;
+                        fs::copy(&incr_path, &dest_incr)?;
+
+                        // Run agave-ledger-tool to copy ledger into backup directory
+                        let end_copy_slot = slot.saturating_add(32);
+                        info!(
+                            "Running agave-ledger-tool: {} blockstore --ignore-ulimit-nofile-error -l {:?} copy --starting-slot {} --ending-slot {} --target-ledger {:?}",
+                            agave_ledger_tool_path.display(),
+                            ledger_path,
+                            start_slot,
+                            end_copy_slot,
+                            backup_ledger_dir
+                        );
+                        let status = Command::new(&agave_ledger_tool_path)
+                            .arg("blockstore")
+                            .arg("--ignore-ulimit-nofile-error")
+                            .arg("-l")
+                            .arg(&ledger_path)
+                            .arg("copy")
+                            .arg("--starting-slot")
+                            .arg(start_slot.to_string())
+                            .arg("--ending-slot")
+                            .arg(end_copy_slot.to_string())
+                            .arg("--target-ledger")
+                            .arg(&backup_ledger_dir)
+                            .status()?;
+                        if !status.success() {
+                            return Err(anyhow!(
+                                "agave-ledger-tool failed with status: {}",
+                                status
+                            ));
+                        }
+
+                        // Trigger snapshot creation using same flow as SnapshotSlot
+                        info!(
+                            "Starting snapshot at slot {} using backup ledger and snapshots dir...",
+                            slot
+                        );
+                        let save_snapshot = true;
+                        let account_paths = vec![backup_ledger_dir.clone()];
+                        get_bank_from_ledger(
+                            cli.operator_address,
+                            &backup_ledger_dir,
+                            account_paths,
+                            backup_snapshots_dir.clone(),
+                            backup_snapshots_dir.clone(),
+                            &slot,
+                            save_snapshot,
+                            backup_snapshots_dir.clone(),
+                            &cli.cluster,
+                        );
+
+                        if generate_meta_merkle {
+                            info!("Generating MetaMerkleSnapshot for slot {}...", slot);
+                            let mm_start = std::time::Instant::now();
+
+                            let bank = get_bank_from_snapshot_at_slot(
+                                slot,
+                                &backup_snapshots_dir,
+                                &backup_snapshots_dir,
+                                vec![backup_ledger_dir.clone()],
+                                backup_ledger_dir.as_path(),
+                            )?;
+                            let meta_merkle_snapshot =
+                                generate_meta_merkle_snapshot(&Arc::new(bank))?;
+                            let mm_file_path =
+                                backup_snapshots_dir.join(format!("meta_merkle-{}.zip", slot));
+                            meta_merkle_snapshot.save_compressed(mm_file_path.clone())?;
+
+                            let mm_duration = mm_start.elapsed();
+                            info!(
+                                "Saved MetaMerkleSnapshot to {:?} (took {:?})",
+                                mm_file_path, mm_duration
+                            );
+                        }
+
+                        info!("Completed AwaitSnapshot flow. Exiting.");
+                        break;
+                    } else {
+                        info!(
+                            "Missing full snapshot for start_slot {}. Sleeping for {} minutes...",
+                            start_slot, scan_interval
+                        );
+                        thread::sleep(sleep_duration);
+                        continue;
+                    }
+                } else {
+                    info!(
+                        "No incremental snapshot with end <= target_slot found yet. Sleeping for {} minutes...",
+                        scan_interval
+                    );
+                    thread::sleep(sleep_duration);
+                    continue;
+                }
+            }
         }
     }
     Ok(())
