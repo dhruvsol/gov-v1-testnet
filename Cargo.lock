@@ -1805,7 +1805,8 @@ dependencies = [
  "clap 4.5.47",
  "env_logger 0.10.2",
  "flate2",
- "gov-v1",
+ "gov-v1 0.1.0",
+ "govcontract",
  "im",
  "itertools 0.11.0",
  "log",
@@ -3029,6 +3030,24 @@ name = "gov-v1"
 version = "0.1.0"
 dependencies = [
  "anchor-lang 0.31.1",
+ "govcontract",
+]
+
+[[package]]
+name = "gov-v1"
+version = "0.1.0"
+source = "git+https://github.com/exo-tech-xyz/gov-v1#757d45d4cfba8b1b1d7311db26bf10ac010ef92c"
+dependencies = [
+ "anchor-lang 0.31.1",
+]
+
+[[package]]
+name = "govcontract"
+version = "0.1.0"
+source = "git+https://github.com/3uild-3thos/govcontract#21891d1c94dc4c4f5f4ee92392d80594555e1985"
+dependencies = [
+ "anchor-lang 0.31.1",
+ "gov-v1 0.1.0 (git+https://github.com/exo-tech-xyz/gov-v1)",
 ]
 
 [[package]]
@@ -12102,7 +12121,7 @@ dependencies = [
  "anchor-client",
  "borsh 0.10.4",
  "cli",
- "gov-v1",
+ "gov-v1 0.1.0",
  "meta-merkle-tree",
 ]
 
@@ -12945,7 +12964,7 @@ dependencies = [
  "cli",
  "env_logger 0.10.2",
  "flate2",
- "gov-v1",
+ "gov-v1 0.1.0",
  "log",
  "meta-merkle-tree",
  "once_cell",

@@ -153,6 +153,9 @@ pub enum Commands {
     FinalizeBallot {
         #[arg(long, help = "Id of ballot box")]
         id: u64,
+
+        #[arg(long, value_parser = parse_pubkey)]
+        proposal: Pubkey,
     },
     CastVote {
         #[arg(long, help = "Id of ballot box")]
@@ -425,7 +428,7 @@ fn main() -> Result<()> {
             let tx = send_set_tie_breaker(tx_sender, ballot_box_pda, idx)?;
             info!("Transaction sent: {}", tx);
         }
-        Commands::FinalizeBallot { id } => {
+        Commands::FinalizeBallot { id, proposal } => {
             info!("FinalizeBallot...");
 
             let payer = read_keypair_file(&cli.payer_path).unwrap();
@@ -439,7 +442,8 @@ fn main() -> Result<()> {
                 payer: &payer,
                 authority: &payer,
             };
-            let tx = send_finalize_ballot(tx_sender, ballot_box_pda, consensus_result_pda)?;
+            let tx =
+                send_finalize_ballot(tx_sender, ballot_box_pda, consensus_result_pda, proposal)?;
             info!("Transaction sent: {}", tx);
         }
         // === Snapshot Processing ===

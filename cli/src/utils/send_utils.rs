@@ -8,6 +8,7 @@ use anchor_client::{
     ClientError, Program,
 };
 use gov_v1::{accounts, instruction, Ballot, MetaMerkleLeaf, ProgramConfig, StakeMerkleLeaf};
+use govcontract;
 use solana_sdk::instruction::Instruction;
 use solana_sdk::{compute_budget::ComputeBudgetInstruction, transaction::Transaction};
 
@@ -187,6 +188,7 @@ pub fn send_finalize_ballot(
     tx_sender: &TxSender,
     ballot_box: Pubkey,
     consensus_result: Pubkey,
+    proposal: Pubkey,
 ) -> Result<Signature, ClientError> {
     let ixs = tx_sender
         .program
@@ -195,6 +197,8 @@ pub fn send_finalize_ballot(
             payer: tx_sender.payer.pubkey(),
             ballot_box,
             consensus_result,
+            proposal,
+            govcontract_program: govcontract::ID,
             system_program: system_program::ID,
         })
         .args(instruction::FinalizeBallot {})
@@ -290,9 +294,7 @@ pub fn send_close_meta_merkle_proof(
     tx_sender.send(ixs)
 }
 
-pub fn send_finalize_proposed_authority(
-    tx_sender: &TxSender,
-) -> Result<Signature, ClientError> {
+pub fn send_finalize_proposed_authority(tx_sender: &TxSender) -> Result<Signature, ClientError> {
     let ixs = tx_sender
         .program
         .request()
