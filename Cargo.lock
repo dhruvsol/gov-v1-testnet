@@ -1413,7 +1413,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "115e54d64eb62cdebad391c19efc9dce4981c690c85a33a12199d99bb9546fee"
 dependencies = [
  "borsh-derive 0.10.4",
- "hashbrown 0.12.3",
+ "hashbrown 0.13.2",
 ]
 
 [[package]]
@@ -3044,7 +3044,7 @@ dependencies = [
 [[package]]
 name = "govcontract"
 version = "0.1.0"
-source = "git+https://github.com/3uild-3thos/govcontract#ba67e1de0ba3afdba58956f0c74d18d1111730b0"
+source = "git+https://github.com/3uild-3thos/govcontract?branch=testnet-v2#6c928cb2bff411321615a596ecade089cec9b97a"
 dependencies = [
  "anchor-lang 0.31.1",
  "gov-v1 0.1.0 (git+https://github.com/exo-tech-xyz/gov-v1)",

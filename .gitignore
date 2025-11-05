@@ -10,3 +10,7 @@ node_modules
 *.db-journal
 *.db-shm
 *.db-wal
+
+
+temp1.json
+temp2.json

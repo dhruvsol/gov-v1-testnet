@@ -43,6 +43,7 @@ pub fn handler(ctx: Context<FinalizeBallot>) -> Result<()> {
         proposal: ctx.accounts.proposal.to_account_info(),
         consensus_result: ctx.accounts.consensus_result.to_account_info(),
     };
+    ctx.accounts.consensus_result.reload()?;
     let seeds: &[&[u8]] = &[
         b"ConsensusResult".as_ref(),
         &ballot_box.ballot_id.to_le_bytes(),
