@@ -13,9 +13,9 @@ use cli::{generate_meta_merkle_snapshot, utils::*, MetaMerkleSnapshot};
 use gov_v1::{Ballot, BallotBox, ConsensusResult, MetaMerkleProof, ProgramConfig};
 use log::info;
 use solana_sdk::signer::Signer;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::{collections::HashMap, fs, process::Command, thread, time::Duration};
+use std::{path::PathBuf, str::FromStr};
 use tip_router_operator_cli::{
     cli::SnapshotPaths,
     ledger_utils::{get_bank_from_ledger, get_bank_from_snapshot_at_slot},
@@ -154,8 +154,8 @@ pub enum Commands {
         #[arg(long, help = "Id of ballot box")]
         id: u64,
 
-        #[arg(long, value_parser = parse_pubkey)]
-        proposal: Pubkey,
+        #[arg(long)]
+        proposal: String,
     },
     CastVote {
         #[arg(long, help = "Id of ballot box")]
@@ -442,8 +442,12 @@ fn main() -> Result<()> {
                 payer: &payer,
                 authority: &payer,
             };
-            let tx =
-                send_finalize_ballot(tx_sender, ballot_box_pda, consensus_result_pda, proposal)?;
+            let tx = send_finalize_ballot(
+                tx_sender,
+                ballot_box_pda,
+                consensus_result_pda,
+                solana_sdk::pubkey::Pubkey::from_str(&proposal).unwrap(),
+            )?;
             info!("Transaction sent: {}", tx);
         }
         // === Snapshot Processing ===

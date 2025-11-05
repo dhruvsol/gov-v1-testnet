@@ -3030,7 +3030,6 @@ name = "gov-v1"
 version = "0.1.0"
 dependencies = [
  "anchor-lang 0.31.1",
- "govcontract",
 ]
 
 [[package]]
