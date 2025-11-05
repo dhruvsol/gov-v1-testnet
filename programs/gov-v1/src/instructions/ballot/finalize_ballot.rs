@@ -18,8 +18,10 @@ pub struct FinalizeBallot<'info> {
         space = 8 + ConsensusResult::INIT_SPACE
     )]
     pub consensus_result: Box<Account<'info, ConsensusResult>>,
+    /// CHECK: Proposal account is checked in the CPI.
     #[account(mut)]
     pub proposal: UncheckedAccount<'info>,
+    /// CHECK: Govcontract program is checked in the CPI.
     #[account(address = govcontract::ID)]
     pub govcontract_program: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
@@ -41,15 +43,16 @@ pub fn handler(ctx: Context<FinalizeBallot>) -> Result<()> {
         proposal: ctx.accounts.proposal.to_account_info(),
         consensus_result: ctx.accounts.consensus_result.to_account_info(),
     };
-    let signer_seeds = &[&[
-        b"ConsensusResult",
+    let seeds: &[&[u8]] = &[
+        b"ConsensusResult".as_ref(),
         &ballot_box.ballot_id.to_le_bytes(),
         &[ctx.bumps.consensus_result],
-    ]];
+    ];
+    let signer = &[&seeds[..]];
     let cpi_ctx = CpiContext::new_with_signer(
         ctx.accounts.govcontract_program.to_account_info(),
         cpi_accounts,
-        signer_seeds,
+        signer,
     );
     govcontract::cpi::add_merkle_root(cpi_ctx)?;
 
