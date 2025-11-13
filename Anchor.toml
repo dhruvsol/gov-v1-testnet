@@ -8,7 +8,7 @@ skip-lint = false
 [programs.localnet]
 gov_v1 = "66R5ByTjyA1SvxB5aJxMWipYjkSjTuQzUL7mJaro5BXc"
 [programs.testnet]
-gov_v1 = "F3ZY8uXns4UDorFc9FASojnecMTq5yT5QakrjdocxTLF"
+gov_v1 = "DYvhrdFv8PSzta2u2igEoAXR6A6nzUXBnVhy6iNM6F7"
 
 [registry]
 url = "https://api.apr.dev"
