@@ -53,6 +53,8 @@ pub fn handler(
     ];
     let (proposal_pda, _) = Pubkey::find_program_address(seeds, &GOV_PROGRAM_ID);
 
+    msg!("proposal_pda: {:?}", proposal_pda);
+    msg!("proposal_key: {:?}", ctx.accounts.proposal.key());
     require!(
         proposal_pda == ctx.accounts.proposal.key(),
         ErrorCode::InvalidProposal
