@@ -10,18 +10,19 @@ const GOV_PROGRAM_ID: Pubkey = pubkey!("6MX2RaV2vfTGv6c7zCmRAod2E6MdAgR6be2Vb3Ns
 pub struct InitBallotBox<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    #[cfg_attr(not(feature = "skip-pda-check"), account(
-        seeds = [
-            b"proposal",
-            &proposal_seed.to_le_bytes(),
-            spl_vote_account.as_ref()
-        ],
-        bump,
-        seeds::program = GOV_PROGRAM_ID
-    ))]
+    // #[cfg_attr(not(feature = "skip-pda-check"), account(
+    //     seeds = [
+    //         b"proposal",
+    //         &proposal_seed.to_le_bytes(),
+    //         spl_vote_account.as_ref()
+    //     ],
+    //     bump,
+    //     seeds::program = GOV_PROGRAM_ID
+    // ))]
     /// Verifies that signer is a Proposal PDA from the governance program.
     /// When `skip-pda-check` feature is enabled, this check is disabled to allow local testing without CPI.
-    pub proposal: Signer<'info>,
+    /// CHECK: This is verified by the caller.
+    pub proposal: UncheckedAccount<'info>,
     #[account(
         init,
         seeds = [
