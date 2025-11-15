@@ -14,7 +14,7 @@ pub struct InitBallotBox<'info> {
     /// Verifies that signer is a Proposal PDA from the governance program.
     /// When `skip-pda-check` feature is enabled, this check is disabled to allow local testing without CPI.
     /// CHECK: This is verified by the caller.
-    pub proposal: UncheckedAccount<'info>,
+    pub proposal: Signer<'info>,
     #[account(
         init,
         seeds = [
