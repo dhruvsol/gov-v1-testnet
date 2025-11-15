@@ -41,11 +41,6 @@ pub fn handler(
     // Check that snapshot slot is greater than current slot to
     // allow sufficient lead time for snapshot.
     require!(snapshot_slot > clock.slot, ErrorCode::InvalidSnapshotSlot);
-    require!(ctx.accounts.proposal.is_signer, ErrorCode::InvalidProposal);
-    require!(
-        ctx.accounts.proposal.owner == &GOV_PROGRAM_ID,
-        ErrorCode::InvalidProposal
-    );
     let seeds: &[&[u8]] = &[
         b"proposal".as_ref(),
         &proposal_seed.to_le_bytes(),
@@ -55,6 +50,13 @@ pub fn handler(
 
     msg!("proposal_pda: {:?}", proposal_pda);
     msg!("proposal_key: {:?}", ctx.accounts.proposal.key());
+    msg!("proposal_is_signer: {:?}", ctx.accounts.proposal.is_signer);
+    require!(ctx.accounts.proposal.is_signer, ErrorCode::InvalidProposal);
+    require!(
+        ctx.accounts.proposal.owner == &GOV_PROGRAM_ID,
+        ErrorCode::InvalidProposal
+    );
+
     require!(
         proposal_pda == ctx.accounts.proposal.key(),
         ErrorCode::InvalidProposal
