@@ -3,7 +3,7 @@ use anchor_lang::prelude::*;
 use crate::{error::ErrorCode, BallotBox, ProgramConfig};
 
 #[cfg(not(feature = "skip-pda-check"))]
-const GOV_PROGRAM_ID: Pubkey = pubkey!("GoVpHPV3EY89hwKJjfw19jTdgMsGKG4UFSE2SfJqTuhc");
+const GOV_PROGRAM_ID: Pubkey = pubkey!("6MX2RaV2vfTGv6c7zCmRAod2E6MdAgR6be2Vb3NsMxPW");
 
 #[derive(Accounts)]
 #[instruction(snapshot_slot: u64, proposal_seed: u64, spl_vote_account: Pubkey)]
