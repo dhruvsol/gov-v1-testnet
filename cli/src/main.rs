@@ -149,6 +149,13 @@ pub enum Commands {
         vote_duration: Option<i64>,
     },
     FinalizeProposedAuthority {},
+    AddVoterToSnapshot {
+        #[arg(long, help = "Snapshot slot of ballot box")]
+        snapshot_slot: u64,
+
+        #[arg(long, value_parser = parse_pubkey, help = "Voter pubkey to add")]
+        voter: Pubkey,
+    },
     FinalizeBallot {
         #[arg(long, help = "Snapshot slot of ballot box")]
         snapshot_slot: u64,
@@ -363,6 +370,31 @@ fn main() -> Result<()> {
             };
             let tx = send_finalize_proposed_authority(tx_sender)?;
             info!("Transaction sent: {}", tx);
+        }
+        Commands::AddVoterToSnapshot {
+            snapshot_slot,
+            voter,
+        } => {
+            info!("AddVoterToSnapshot...");
+
+            let payer = read_keypair_file(&cli.payer_path).unwrap();
+            let authority = read_keypair_file(&cli.authority_path).unwrap();
+            let program = load_client_program(&payer, cli.rpc_url);
+
+            let tx_sender = &TxSender {
+                program: &program,
+                micro_lamports: cli.micro_lamports,
+                payer: &payer,
+                authority: &authority,
+            };
+
+            let tx = send_add_voter_to_snapshot(tx_sender, snapshot_slot, voter)?;
+            info!("Transaction sent: {}", tx);
+            info!(
+                "== Added voter {} to snapshot_slot {} (BallotBox + ProgramConfig) ==",
+                voter,
+                snapshot_slot
+            );
         }
         Commands::CastVote { snapshot_slot, root, hash } => cast_vote_shared(cli, snapshot_slot, root, hash)?,
         Commands::CastVoteFromSnapshot {

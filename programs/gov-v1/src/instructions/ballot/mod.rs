@@ -1,4 +1,5 @@
 pub mod cast_vote;
+pub mod add_voter_to_snapshot;
 pub mod finalize_ballot;
 pub mod init_ballot_box;
 pub mod remove_vote;
@@ -6,6 +7,7 @@ pub mod reset_ballot_box;
 pub mod set_tie_breaker;
 
 pub use cast_vote::*;
+pub use add_voter_to_snapshot::*;
 pub use finalize_ballot::*;
 pub use init_ballot_box::*;
 pub use remove_vote::*;
