@@ -58,6 +58,14 @@ pub mod gov_v1 {
         init_ballot_box::handler(ctx, snapshot_slot, proposal_seed, spl_vote_account)
     }
 
+    pub fn add_voter_to_snapshot(
+        ctx: Context<AddVoterToSnapshot>,
+        snapshot_slot: u64,
+        voter: Pubkey,
+    ) -> Result<()> {
+        add_voter_to_snapshot::handler(ctx, snapshot_slot, voter)
+    }
+
     pub fn cast_vote(ctx: Context<CastVote>, ballot: Ballot) -> Result<()> {
         cast_vote::handler(ctx, ballot)
     }

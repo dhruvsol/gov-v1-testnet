@@ -10,7 +10,11 @@ use anchor_client::{
     },
     ClientError, Program,
 };
-use gov_v1::{accounts, instruction, Ballot, MetaMerkleLeaf, ProgramConfig, StakeMerkleLeaf};
+use gov_v1::{
+    accounts, instruction, Ballot, BallotBox, MetaMerkleLeaf, ProgramConfig, StakeMerkleLeaf,
+};
+use solana_sdk::instruction::Instruction;
+use solana_sdk::{compute_budget::ComputeBudgetInstruction, transaction::Transaction};
 
 pub struct TxSender<'a> {
     pub program: &'a Program<&'a Keypair>,
@@ -195,6 +199,29 @@ pub fn send_init_ballot_box(
             system_program: system_program::ID,
         })
         .args(instruction::InitBallotBox { snapshot_slot, proposal_seed: 0, spl_vote_account: Pubkey::default() })
+        .instructions()?;
+
+    tx_sender.send(ixs)
+}
+
+pub fn send_add_voter_to_snapshot(
+    tx_sender: &TxSender,
+    snapshot_slot: u64,
+    voter: Pubkey,
+) -> Result<Signature, ClientError> {
+    let ballot_box = BallotBox::pda(snapshot_slot).0;
+    let ixs = tx_sender
+        .program
+        .request()
+        .accounts(accounts::AddVoterToSnapshot {
+            caller: tx_sender.authority.pubkey(),
+            ballot_box,
+            program_config: ProgramConfig::pda().0,
+        })
+        .args(instruction::AddVoterToSnapshot {
+            snapshot_slot,
+            voter,
+        })
         .instructions()?;
 
     tx_sender.send(ixs)
