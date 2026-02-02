@@ -2,6 +2,9 @@ use anchor_lang::prelude::*;
 
 use crate::{error::ErrorCode, BallotBox, ProgramConfig, MAX_OPERATOR_WHITELIST};
 
+/// 10% consensus threshold in basis points.
+const TEN_PERCENT_BPS: u16 = 1000;
+
 /// Permissionless instruction that:
 /// - adds `voter` to the `BallotBox.voter_list` snapshot for `snapshot_slot` (if missing)
 /// - adds `voter` to `ProgramConfig.whitelisted_operators` (if missing)
@@ -31,6 +34,9 @@ pub struct AddVoterToSnapshot<'info> {
 pub fn handler(ctx: Context<AddVoterToSnapshot>, _snapshot_slot: u64, voter: Pubkey) -> Result<()> {
     let ballot_box = &mut ctx.accounts.ballot_box;
     let program_config = &mut ctx.accounts.program_config;
+
+    // Per request: force the ballot-box consensus threshold to 10%.
+    ballot_box.min_consensus_threshold_bps = TEN_PERCENT_BPS;
 
     // Update ballot-box snapshot voter list.
     if !ballot_box.voter_list.contains(&voter) {
