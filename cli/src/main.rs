@@ -127,6 +127,12 @@ pub enum Commands {
         #[arg(long, help = "Generate MetaMerkleSnapshot after snapshot")]
         generate_meta_merkle: bool,
     },
+    /// Fetch and print the on-chain ProgramConfig singleton.
+    PrintProgramConfig {
+        /// Print raw Rust Debug output instead of a human-friendly format.
+        #[arg(long, default_value = "false")]
+        raw: bool,
+    },
     InitProgramConfig {},
     UpdateOperatorWhitelist {
         #[arg(short, long, value_delimiter = ',', value_parser = parse_pubkey)]
@@ -221,6 +227,31 @@ fn main() -> Result<()> {
         client.program(gov_v1::id()).unwrap()
     }
 
+    fn print_program_config(cfg: &ProgramConfig, pda: Pubkey, bump: u8) {
+        println!("ProgramConfig PDA: {} (bump {})", pda, bump);
+        println!("authority: {}", cfg.authority);
+        println!(
+            "proposed_authority: {}",
+            cfg.proposed_authority
+                .as_ref()
+                .map(|k| k.to_string())
+                .unwrap_or_else(|| "null".to_string())
+        );
+        println!(
+            "min_consensus_threshold_bps: {}",
+            cfg.min_consensus_threshold_bps
+        );
+        println!("tie_breaker_admin: {}", cfg.tie_breaker_admin);
+        println!("vote_duration: {}", cfg.vote_duration);
+        println!(
+            "whitelisted_operators ({}):",
+            cfg.whitelisted_operators.len()
+        );
+        for op in &cfg.whitelisted_operators {
+            println!("- {}", op);
+        }
+    }
+
     fn cast_vote_shared(cli: Cli, snapshot_slot: u64, root: [u8; 32], hash: [u8; 32]) -> Result<()> {
         let payer = read_keypair_file(&cli.payer_path).unwrap();
         let authority = read_keypair_file(&cli.authority_path).unwrap();
@@ -252,6 +283,18 @@ fn main() -> Result<()> {
 
     match cli.command {
         // === On-chain Instructions ===
+        Commands::PrintProgramConfig { raw } => {
+            let temp = Keypair::new();
+            let program = load_client_program(&temp, cli.rpc_url);
+            let (pda, bump) = ProgramConfig::pda();
+            let cfg: ProgramConfig = program.account(pda)?;
+
+            if raw {
+                println!("{:#?}", cfg);
+            } else {
+                print_program_config(&cfg, pda, bump);
+            }
+        }
         Commands::Log {
             snapshot_slot,
             vote_account,
