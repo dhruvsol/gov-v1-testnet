@@ -239,7 +239,7 @@ cargo run --release --bin cli -- \
 
 ### Log On-Chain State
 
-````bash
+```bash
 # Log ProgramConfig
 RUST_LOG=info cargo run --bin cli -- \
   --rpc-url https://api.devnet.solana.com log \
@@ -254,7 +254,7 @@ RUST_LOG=info cargo run --bin cli -- \
 RUST_LOG=info cargo run --bin cli -- \
   --rpc-url https://api.devnet.solana.com log \
   --ty consensus-result --snapshot-slot <SLOT>
-
+```
 ---
 
 ### Voting Flow
@@ -283,7 +283,7 @@ RUST_LOG=info cargo run --bin cli -- \
   --authority-path ~/.config/solana/id.json \
   --rpc-url https://api.devnet.solana.com \
   remove-vote --snapshot-slot <SLOT>
-````
+```
 
 ---
 
